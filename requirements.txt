@@ -12,3 +12,4 @@ trl
 wandb
 wikipedia
 vllm==0.11.2
+tensorboard
