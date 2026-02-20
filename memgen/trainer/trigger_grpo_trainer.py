@@ -11,6 +11,7 @@ from peft import PeftConfig
 
 from typing import Union, Callable, Optional, Any
 from contextlib import nullcontext
+import copy
 import torch
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.utils.data import Dataset
@@ -61,8 +62,15 @@ class TriggerGRPOTrainer(GRPOTrainer):
             peft_config=peft_config
         )
 
-        # If PEFT configuration is not provided, create a reference model based on the initial model.
-        ref_model = create_reference_model(model.trigger)
+        # TRL's create_reference_model is not compatible with DeepSpeed ZeRO-3.
+        # Fall back to a direct model copy in that case.
+        try:
+            ref_model = create_reference_model(model.trigger)
+        except ValueError as e:
+            if "DeepSpeed ZeRO-3 is enabled" in str(e):
+                ref_model = copy.deepcopy(model.trigger)
+            else:
+                raise
         self.ref_model = self.accelerator.prepare_model(ref_model, evaluation_mode=True)
         self.tensor_fn = TensorHelper(TensorConfig(
             pad_token_id=self.processing_class.pad_token_id,
